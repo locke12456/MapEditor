@@ -3,6 +3,7 @@ using UnityEditor;
 using System.Collections;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Assets.Draw.utils;
 using Assets.Draw;
 
@@ -47,7 +48,7 @@ public class DrawEditor : UnityEditor.Editor
         _target = (Draw)target;
         if (!_target.draw) return;
         var e = Event.current;
-        RaycastHit hit,hit2;
+        RaycastHit hit;
         var ray = HandleUtility.GUIPointToWorldRay(e.mousePosition);
         var paintLayer = 0;
         int layerMask = 1 << paintLayer;
@@ -56,25 +57,47 @@ public class DrawEditor : UnityEditor.Editor
         {
             Handles.color = Color.green;
             draw(hit, _target.size);
-            DiscPosition pos = new DiscPosition();
-            pos.disc(target_object.GUIPostion, e.mousePosition);
-            foreach (DrawObject current in temp_raycasthit)
-            {
-                Handles.color = Color.green;
-                DiscPosition hit_pos = new DiscPosition();
-                hit_pos.disc(target_object.GUIPostion, current.GUIPostion);
-                var po = hit_pos.calc(pos);
-                if(po.Count>0)
-                { 
-                        Handles.color = Color.red;
-                }
-                draw(current.hit, _target.size, temp_raycasthit.IndexOf(current) + 1);
-            }
-            //Debug.Log(e.mousePosition);
+            Dictionary<RaycastHit, Position> draw_plases = new Dictionary<RaycastHit, Position>();
+            _find_hit_places(e.mousePosition,draw_plases);
+            _draw_hit_places(draw_plases);
         }
         mouseEvent(e);
         //Debug.Log(0);
 
+    }
+
+    private void _find_hit_places(Vector2 mouse, Dictionary<RaycastHit, Position> draw_plases)
+    {
+        DiscPosition pos = new DiscPosition();
+        pos.disc(target_object.GUIPostion, mouse);
+        foreach (DrawObject current in temp_raycasthit)
+        {
+            Handles.color = Color.green;
+            DiscPosition hit_pos = new DiscPosition();
+            hit_pos.disc(target_object.GUIPostion, current.GUIPostion);
+            List<Position> hit_places = pos.calc(hit_pos);
+            if (hit_places.Count > 0)
+            {
+                hit_places.Sort((x, y) => (x.Value < y.Value ? 1 : 0));
+                draw_plases.Add(current.hit, hit_places[0]);
+            }
+            else
+                draw(current.hit, _target.size, temp_raycasthit.IndexOf(current) + 1);
+        }
+    }
+
+    private void _draw_hit_places(Dictionary<RaycastHit, Position> draw_plases)
+    {
+        var sortedDict = from entry in draw_plases orderby entry.Value.Value descending select entry;
+        foreach (var item in sortedDict)
+        {
+            Handles.color = Color.red;
+
+            if (sortedDict.First().Value != item.Value)
+                Handles.color = Color.green;
+
+            draw(item.Key, _target.size);
+        }
     }
 
     private void _adjust_range(int layerMask)
