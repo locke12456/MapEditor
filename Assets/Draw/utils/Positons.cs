@@ -2,10 +2,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+#if UNITY_EDITOR
 using UnityEditor;
 using UnityEngine;
 
-namespace Assets.Draw.utils
+namespace MapEditor.Draw.utils
 {
     public class Position {
         private bool in_range;
@@ -32,20 +33,34 @@ namespace Assets.Draw.utils
         public Position right;
         public Position top;
         public Position bottom;
-        public bool in_left;
-        public bool in_right;
-        public bool in_top;
-        public bool in_bottom;
+        public float dist;
         public Distance(Vector2 pos, Vector2 target) {
             left = new Position((pos.x) - target.x);
             right =new Position((target.x) - pos.x);
             top = new Position((pos.y) - target.y);
             bottom = new Position((target.y) - pos.y);
+            dist = Vector2.Distance(pos, target);
         }
         
     }
     public class DiscPosition {
         public Distance distance;
+        public static bool operator <=(DiscPosition x, DiscPosition y)
+        {
+            Func<float, float> _range = (t) => t + t / 2;
+            Func<float, float, float, bool> _in_range =
+                (current_dist, target_dist, range) =>
+                     current_dist >= target_dist / 2 && current_dist <= range;
+            return _in_range(x.distance.dist, y.distance.dist, _range(y.distance.dist));
+        }
+        public static bool operator >=(DiscPosition x, DiscPosition y)
+        {
+            Func<float, float> _range = (t) => t + t / 2;
+            Func<float, float, bool> _in_range =
+                (current_dist, range) =>
+                     current_dist >= range;
+            return _in_range(x.distance.dist, _range(y.distance.dist));
+        }
         public void disc(Vector2 pos, Vector2 target)
         {
             distance = new Distance(pos, target);
@@ -53,12 +68,7 @@ namespace Assets.Draw.utils
         public List<Position> calc(DiscPosition target) {
             List<Position> _in_range = new List<Position>();
             Func<bool, bool, bool?> equal = (cur, tar) => cur && tar;
-            Func<Position, Func<float>, Func<bool>, bool> disc = (cur, tar, in_range) =>
-            {
-                cur.calc(tar);
-                return in_range();
-            };
-            Func<Func<bool?>, Position ,Func<float>, Func<bool>,bool> is_in_range = (equals,cur_pos,value,range) => equals() ?? disc(cur_pos,value,range) ;
+            Func<Func<bool?>, Position ,Func<float>, Func<bool>,bool> is_in_range = (equals,cur_pos,value,range) => equals() ?? _is_in_range(cur_pos,value,range) ;
             Dictionary<Position, Func<bool>> pos = new Dictionary<Position, Func<bool>>() {
                 {   distance.top,
                     () => is_in_range(() => equal(OnTop, target.OnTop), distance.top, () => target.distance.top.Value, () => distance.top.InRange)
@@ -78,10 +88,13 @@ namespace Assets.Draw.utils
             };
             foreach (var jud in pos) {
                 if (jud.Value())
+                {
                     _in_range.Add(jud.Key);
+                }
             }
             return _in_range;
         }
+
         public float Left {
             get { return distance.left.Value; }
         }
@@ -152,6 +165,11 @@ namespace Assets.Draw.utils
             {
                 return Bottom > 0;
             }
+        }
+        private bool _is_in_range(Position current, Func<float> target, Func<bool> in_range)
+        {
+            current.calc(target);
+            return in_range();
         }
 
     }
@@ -228,3 +246,4 @@ namespace Assets.Draw.utils
         }
     }
 }
+#endif
